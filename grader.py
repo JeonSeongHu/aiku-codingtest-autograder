@@ -52,5 +52,5 @@ def grade_notebook(notebook_path, grading_criteria):
 
         results[problem_name] = test_results
         os.remove(temp_py_file)
-
+    print(results["Q2"])
     return personal_info, results

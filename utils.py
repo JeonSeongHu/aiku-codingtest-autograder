@@ -11,7 +11,7 @@ def create_import_statements(requirements):
 def compare_output(output, expected_answer, answer_type):
     if answer_type == "float":
         return float(-1e-6 < float(output) - float(expected_answer) < 1e-6)
-    elif answer_type == "ratio":
+    elif answer_type == "point":
         return float(output)
     elif answer_type == "pass":
         return None

@@ -18,7 +18,7 @@ def main():
 
         save_grading_results(results_dir, notebook_file, personal_info, results)
 
-        personal_info.update({problem: sum(test['point'] for test in tests) for problem, tests in results.items()})
+        personal_info.update({problem: sum(test['point'] for test in tests)/len(tests) for problem, tests in results.items()})
         all_results.append(personal_info)
 
     save_overall_results(results_dir, all_results)
