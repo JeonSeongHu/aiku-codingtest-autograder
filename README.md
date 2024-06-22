@@ -62,6 +62,7 @@ Colab Notebook ipynb 파일은 수정 및 내용 추가가 자유롭게 가능�
 
 평가자들의 답안은 `answers/`에, Grading Criteria JSON 파일 실행 경로에 넣어주세요.
 
+```
 aiku-codingtest-autograder
 ├── answers/
 │   ├── evaluator1.ipynb
@@ -70,7 +71,9 @@ aiku-codingtest-autograder
 ├── main.py
 └── grading_criteria.json
 ```
+
 아래과 같이 실행할 수 있으며, 결과는 `results` 폴더에 저장됩니다.
+
 ```
 git clone https://github.com/JeonSeongHu/aiku-codingtest-autograder.git
 pip install -p requirement.txt
