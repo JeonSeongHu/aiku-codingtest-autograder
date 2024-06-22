@@ -37,7 +37,6 @@ def grade_notebook(notebook_path, grading_criteria):
                     subproblem_index = next((i for i, item in enumerate(grading_criteria) if item['number'] == subproblem), -1)
                     subproblem_code = answers[subproblem_index]
                     full_test_code = f"{subproblem_code}\n{full_test_code}"
-
             with open(temp_py_file, 'w', encoding='utf-8') as f:
                 if requirements:
                     import_statements = create_import_statements(requirements)
