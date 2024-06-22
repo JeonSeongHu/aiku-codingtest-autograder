@@ -6,7 +6,7 @@ import os
 from streamlit_ace import st_ace
 from utils import compare_output
 import nbformat as nbf
-
+import io
 
 
 def add_problem():
@@ -29,34 +29,48 @@ def add_problem():
 def delete_problem(index):
     del st.session_state.problems[index]
 
+
 def load_problems():
-    uploaded_grading_criteria = st.file_uploader("Upload grading_criteria.json", type=["json"])
-    uploaded_problem_solutions = st.file_uploader("Upload problem_solutions.json", type=["json"])
+    if 'uploaded_grading_criteria' not in st.session_state or 'uploaded_problem_solutions' not in st.session_state:
+        st.error("Please upload both files.")
+        return
 
-    if uploaded_grading_criteria and uploaded_problem_solutions:
-        try:
-            # Use .read() to get the file contents before loading JSON
-            grading_criteria = json.load(uploaded_grading_criteria)
-            problem_solutions = json.load(uploaded_problem_solutions)
+    try:
+        grading_criteria = json.load(st.session_state.uploaded_grading_criteria)
+        problem_solutions = json.load(st.session_state.uploaded_problem_solutions)
 
-            problems = []
-            # Iterate over the shorter list to avoid IndexError if lists have different lengths
-            for gc, ps in zip(grading_criteria, problem_solutions):
-                # Check for matching problem numbers based on string comparison
-                if str(gc["number"]) == str(ps["number"]):
-                    problems.append({**gc, **ps})
+        problems = []
+        for gc, ps in zip(grading_criteria, problem_solutions):
+            if str(gc["number"]) == str(ps["number"]):
+                problems.append({**gc, **ps})
+            else:
+                st.warning(
+                    f"Problem number mismatch: {gc['number']} in grading_criteria, {ps['number']} in problem_solutions"
+                )
 
-            st.session_state.problems = problems
-            st.success("Problems loaded successfully!")
+        st.session_state.problems = problems
 
-        except json.JSONDecodeError:
-            st.error("Invalid JSON format.")
-        except Exception as e:
-            st.error(f"An error occurred while loading problems: {e}")  # Catch and display general errors
+        # Update Streamlit-ace values
+        for i, problem in enumerate(st.session_state.problems):
+            st.session_state[f"answer_code_{i}"] = problem["answer_code"]
+            st.session_state[f"test_code_{i}"] = problem["test_code"]
+
+        st.success("Problems loaded successfully!")
+
+    except json.JSONDecodeError:
+        st.error("Invalid JSON format in one or both of the uploaded files.")
+    except Exception as e:
+        st.error(f"An error occurred while loading problems: {e}")
+
+
+    except json.JSONDecodeError:
+        st.error("Invalid JSON format in one or both of the uploaded files.")
+    except Exception as e:
+        st.error(f"An error occurred while loading problems: {e}")
 
 
 
-def save_problems():
+def generate_grading_criteria_bytes():
     grading_criteria = [{
         "number": problem["number"],
         "name": problem["name"],
@@ -68,6 +82,10 @@ def save_problems():
         "subproblem_of": problem["subproblem_of"]
     } for problem in st.session_state.problems]
 
+    grading_criteria_bytes = json.dumps(grading_criteria, indent=4, ensure_ascii=False).encode('utf-8')
+    return grading_criteria_bytes
+
+def generate_problem_solutions_bytes():
     problem_solutions = [{
         "number": problem["number"],
         "name": problem["name"],
@@ -75,26 +93,12 @@ def save_problems():
         "answer_code": problem["answer_code"]
     } for problem in st.session_state.problems]
 
-    grading_criteria_bytes = json.dumps(grading_criteria, indent=4, ensure_ascii=False).encode('utf-8')
-    problem_solutions_bytes = json.dumps(problem_solutions, indent=4, ensure_ascii=False).encode('utf-8')
+    return json.dumps(problem_solutions, indent=4, ensure_ascii=False).encode('utf-8')
 
-    st.download_button(
-        label="Download grading_criteria.json",
-        data=grading_criteria_bytes,
-        file_name="grading_criteria.json",
-        mime="application/json"
-    )
-
-    st.download_button(
-        label="Download problem_solutions.json",
-        data=problem_solutions_bytes,
-        file_name="problem_solutions.json",
-        mime="application/json"
-    )
 
 
 def execute_code(problem, test_input):
-    test_code = problem['answer_code'] + "\n" + problem["test_code"].replace('<input>', test_input)
+    test_code = problem['answer_code'] + "\nprint()\n" + problem["test_code"].replace('<input>', test_input)
 
     subproblems = reversed(problem['subproblem_of'])
     for subproblem_number in subproblems:
@@ -104,13 +108,16 @@ def execute_code(problem, test_input):
 
     temp_py_file = 'temp_code.py'
     with open(temp_py_file, 'w', encoding='utf-8') as f:
-        import_statements = "\n".join([f"import {req}" for req in problem["requirements"] if req.strip()])
-        final_code = f"{import_statements}\n{test_code}"
+        import_statements = "\n".join(
+            f"import {req}{' as np' if req == 'numpy' else ' as pd' if req == 'pandas' else ''}"
+            for req in requirements if req
+        )
+        final_code = f"{import_statements}\n{test_code}".strip()
         f.write(final_code)
 
     try:
         output = subprocess.check_output([sys.executable, temp_py_file], stderr=subprocess.STDOUT,
-                                         universal_newlines=True)
+                                         universal_newlines=True).strip().split('\n')[-1]
     except subprocess.CalledProcessError as e:
         output = f"Error during execution:\n{e.output}"  # Capture and display the error message
     finally:
@@ -151,9 +158,20 @@ def create_colab_notebooks():
         notebook.cells.append(code_cell)
 
         # Save the notebook
-    nbf.write(notebook, f'colab_notebook.ipynb')
 
-    st.success("Colab notebooks created successfully!")
+    notebook_bytes_io = io.BytesIO()
+
+    notebook_json = nbf.writes(notebook, version=4)  # Use writes to get JSON string
+    notebook_bytes = notebook_json.encode('utf-8')  # Encode to bytes
+
+    notebook_bytes_io.write(notebook_bytes)  # Write bytes to the buffer
+    notebook_bytes_io.seek(0)  # Reset the buffer's position for reading
+
+    return notebook_bytes_io.getvalue()
+
+st.session_state.uploaded_grading_criteria = st.file_uploader("Upload grading_criteria.json", type=["json"], key="grading_criteria")
+st.session_state.uploaded_problem_solutions = st.file_uploader("Upload problem.json", type=["json"], key="problem_solutions")
+st.button("Load Problems from Uploaded JSONs", on_click=load_problems)
 
 st.title("AIKU 코딩테스트 문제 출제 도우미")
 
@@ -174,16 +192,24 @@ with st.expander("사용 설명"):
 
     ### 입력 가이드:
     - **문제 번호:** 각 문제에 고유한 번호를 부여합니다. (미입력 시 자동 생성)
-    - **요구사항:** 필요한 패키지를 쉼표(,)로 구분하여 입력합니다. (예: numpy, pandas)
+    - **Requirement:** 채점 시에 필요한 패키지를 쉼표(,)로 구분하여 입력합니다. (예: numpy, pandas)
     - **모범 답안 코드:** 파이썬 코드로 정답을 작성합니다.
     - **채점 코드:** 파이썬 코드로 작성하며, `<input>`을 사용하여 테스트 케이스 입력 값을 활용할 수 있습니다.
     - **Expected Answer Type:** 채점 시 예상되는 정답의 데이터 타입을 선택합니다.
-
+    
     ### 추가 정보:
     - **문제 설명:** 마크다운 문법을 지원하여 문제를 보기 좋게 작성할 수 있습니다.
     - **부분 문제:** 특정 문제를 풀기 위해 먼저 풀어야 하는 문제의 번호를 쉼표(,)로 구분하여 입력합니다.
     - **Test Case Input:** 테스트 케이스의 입력 값을 지정합니다.
     - **Expected Answer:** 각 테스트 케이스에 대한 예상되는 정답을 입력합니다.
+
+    ### **테스트 코드 입력 가이드**:
+    - 각 Test case에 대한 해당 코드의 출력(print) **마지막 줄** 결과와, Expected answers의 결과를 정해진 type에 따라 비교합니다.
+    - Expected answer와 output을 비교하지 않고 점수를 코드 내에서 직접 계산하여 출력하고자 하는 경우, 'point'를 선택하면 됩니다.
+    - <input>을 이용하면, test case input을 직접 명시할 수 있습니다. <input>은 Test case에 명시된 값으로 실행시 대체됩니다.
+    - Output은 모든 출력의 마지막 줄에 해당하며 해당 string이 Expected Answer Type으로 변환되어 Expected Answer와 비교됩니다.
+    
+
     """)
 
 
@@ -203,9 +229,18 @@ for i, problem in enumerate(st.session_state.problems):
         st.markdown(problem["description"])
         requirements = st.text_input("Requirements (comma-separated)", ", ".join(problem["requirements"]), key=f"requirements_{i}")
         problem["requirements"] = [req.strip() for req in requirements.split(",")]
-
-        problem["answer_code"] = st_ace(f"모범 답안 코드입니다.\n", language='python', key=f"answer_code_{i}")
-        problem["test_code"] = st_ace(f"채점을 위한 코드입니다. 해당 코드의 출력(print) 결과와, 아래의 expected answers의 결과를 정해진 type에 따라 비교합니다.\n\n점수를 직접 출력하고자 하는 경우, 'point'를 선택하면 됩니다. 이 때, 출력 형식은 float여야 하며, 해당 test code의 출력 결과가 그대로 점수로 반영됩니다.\n\n <input> 을 이용하여, test case input을 직접 명시할 수 있습니다.\n\n", language='python', key=f"test_code_{i}")
+        st.markdown("**모범 답안 작성**")
+        problem["answer_code"] = st_ace(
+            language='python',
+            key=f"answer_code_{i}",
+            value=problem["answer_code"]  # Get from session state or use empty string
+        )
+        st.markdown("**태스트 코드 작성 (가이드라인 필독)**")
+        problem["test_code"] = st_ace(
+            language='python',
+            key=f"test_code_{i}",
+            value=problem["test_code"]  # Get from session state or use empty string
+        )
         num_inputs = st.number_input(f"Number of Test Cases", min_value=1, value=len(problem["input"]) or 1, key=f"num_inputs_{i}")
 
         if len(problem["input"]) < num_inputs:
@@ -223,16 +258,22 @@ for i, problem in enumerate(st.session_state.problems):
         problem["expected_answers_type"] = st.selectbox(f"Expected Answer Type", ["float", "list", "dict", "set", "str", "int", "pass", "point"], index=["float", "list", "dict", "set", "str", "int", "pass", "point"].index(problem["expected_answers_type"] if problem["expected_answers_type"] else "float"), key=f"expected_answers_type_{i}")
 
         subproblem_of = st.text_input(f"부분 문제 (comma-separated)", ", ".join(problem["subproblem_of"]), key=f"subproblem_of_{i}")
-        problem["부분 문제"] = [sub.strip() for sub in subproblem_of.split(",")]
+        problem["subproblem_of"] = [sub.strip() for sub in subproblem_of.split(",")]
 
         if st.button("Run Test Code", key=f"run_test_code_{i}"):
             test_input = problem["input"][0]
+
+            # Clear the output variable before running the test code
+            output = ""
+
             test_code, output = execute_code(problem, test_input)
             expected_answer = problem["expected_answers"][0]
 
             st.text_area("Generated Test Code", test_code, height=200)
             st.text_area("Test Output", output, height=100)  # Display the output (including errors)
             st.text_area("Expected Answer", expected_answer, height=100)
+
+            # Error handling for both execution and comparison
             if "Error during execution:" not in output:
                 try:
                     comparison_result = compare_output(output, expected_answer, problem["expected_answers_type"])
@@ -241,12 +282,26 @@ for i, problem in enumerate(st.session_state.problems):
                     st.text_area("Comparison Result", f"Error during comparison: {e}", height=50)
 
 st.button("Add Problem", on_click=add_problem)
-st.button("Load Problems", on_click=load_problems)
-st.button("Save Problems", on_click=save_problems)
+
+
+
+st.download_button(
+    label="Download Problems JSON",
+    data=generate_problem_solutions_bytes(),
+    file_name="problems.json",
+    mime="application/json"
+)
 
 # Display the problems JSON
 st.subheader("Problems JSON")
 st.json(st.session_state.problems)
+
+st.download_button(
+    label="Download Grading Criteria JSON",
+    data=generate_grading_criteria_bytes(),
+    file_name="grading_criteria.json",
+    mime="application/json"
+)
 
 # Display the grading criteria JSON
 st.subheader("Grading Criteria JSON")
@@ -262,5 +317,9 @@ grading_criteria = [{
 } for problem in st.session_state.problems]
 st.json(grading_criteria)
 
-st.button("Create Colab Notebooks", on_click=create_colab_notebooks)
-
+st.download_button(
+    label="Create Colab Notebooks",
+    data=create_colab_notebooks(),
+    file_name="colab_notebook.ipynb",
+    mime="application/json"
+)

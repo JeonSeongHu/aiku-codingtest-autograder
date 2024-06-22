@@ -1,11 +1,10 @@
 import re
 
 def create_import_statements(requirements):
-    import_statements = "\n"
-    for requirement in requirements:
-        if requirement == "numpy": requirement += " as np"
-        if requirement == "pandas": requirement += " as pd"
-        import_statements += f"import {requirement}\n"
+    import_statements = "\n".join(
+        f"import {req}{' as np' if req == 'numpy' else ' as pd' if req == 'pandas' else ''}"
+        for req in requirements if req
+    )
     return import_statements
 
 def compare_output(output, expected_answer, answer_type):
