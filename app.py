@@ -29,6 +29,33 @@ def add_problem():
 def delete_problem(index):
     del st.session_state.problems[index]
 
+def load_problems():
+    uploaded_grading_criteria = st.file_uploader("Upload grading_criteria.json", type=["json"])
+    uploaded_problem_solutions = st.file_uploader("Upload problem_solutions.json", type=["json"])
+
+    if uploaded_grading_criteria and uploaded_problem_solutions:
+        try:
+            # Use .read() to get the file contents before loading JSON
+            grading_criteria = json.load(uploaded_grading_criteria)
+            problem_solutions = json.load(uploaded_problem_solutions)
+
+            problems = []
+            # Iterate over the shorter list to avoid IndexError if lists have different lengths
+            for gc, ps in zip(grading_criteria, problem_solutions):
+                # Check for matching problem numbers based on string comparison
+                if str(gc["number"]) == str(ps["number"]):
+                    problems.append({**gc, **ps})
+
+            st.session_state.problems = problems
+            st.success("Problems loaded successfully!")
+
+        except json.JSONDecodeError:
+            st.error("Invalid JSON format.")
+        except Exception as e:
+            st.error(f"An error occurred while loading problems: {e}")  # Catch and display general errors
+
+
+
 def save_problems():
     grading_criteria = [{
         "number": problem["number"],
@@ -48,13 +75,22 @@ def save_problems():
         "answer_code": problem["answer_code"]
     } for problem in st.session_state.problems]
 
-    with open('grading_criteria.json', 'w', encoding='utf-8') as f:
-        json.dump(grading_criteria, f, indent=4, ensure_ascii=False)
+    grading_criteria_bytes = json.dumps(grading_criteria, indent=4, ensure_ascii=False).encode('utf-8')
+    problem_solutions_bytes = json.dumps(problem_solutions, indent=4, ensure_ascii=False).encode('utf-8')
 
-    with open('problem_solutions.json', 'w', encoding='utf-8') as f:
-        json.dump(problem_solutions, f, indent=4, ensure_ascii=False)
+    st.download_button(
+        label="Download grading_criteria.json",
+        data=grading_criteria_bytes,
+        file_name="grading_criteria.json",
+        mime="application/json"
+    )
 
-    st.success("Problems and solutions saved successfully!")
+    st.download_button(
+        label="Download problem_solutions.json",
+        data=problem_solutions_bytes,
+        file_name="problem_solutions.json",
+        mime="application/json"
+    )
 
 
 def execute_code(problem, test_input):
@@ -73,12 +109,14 @@ def execute_code(problem, test_input):
         f.write(final_code)
 
     try:
-        output = subprocess.check_output([sys.executable, temp_py_file], universal_newlines=True).strip()
+        output = subprocess.check_output([sys.executable, temp_py_file], stderr=subprocess.STDOUT,
+                                         universal_newlines=True)
     except subprocess.CalledProcessError as e:
-        output = str(e)
+        output = f"Error during execution:\n{e.output}"  # Capture and display the error message
+    finally:
+        os.remove(temp_py_file)  # Clean up the temporary file
 
-    os.remove(temp_py_file)
-    return final_code, output
+    return final_code.strip(), output.strip()  # Strip any extra whitespace from the output
 
 def create_colab_notebooks():
     problem_solutions = [{
@@ -187,19 +225,23 @@ for i, problem in enumerate(st.session_state.problems):
         subproblem_of = st.text_input(f"부분 문제 (comma-separated)", ", ".join(problem["subproblem_of"]), key=f"subproblem_of_{i}")
         problem["부분 문제"] = [sub.strip() for sub in subproblem_of.split(",")]
 
-
         if st.button("Run Test Code", key=f"run_test_code_{i}"):
             test_input = problem["input"][0]
             test_code, output = execute_code(problem, test_input)
             expected_answer = problem["expected_answers"][0]
-            comparison_result = compare_output(output, expected_answer, problem["expected_answers_type"])
 
             st.text_area("Generated Test Code", test_code, height=200)
-            st.text_area("Test Output", output, height=100)
+            st.text_area("Test Output", output, height=100)  # Display the output (including errors)
             st.text_area("Expected Answer", expected_answer, height=100)
-            st.text_area("Comparison Result", str(comparison_result), height=50)
+            if "Error during execution:" not in output:
+                try:
+                    comparison_result = compare_output(output, expected_answer, problem["expected_answers_type"])
+                    st.text_area("Comparison Result", str(comparison_result), height=50)
+                except Exception as e:
+                    st.text_area("Comparison Result", f"Error during comparison: {e}", height=50)
 
 st.button("Add Problem", on_click=add_problem)
+st.button("Load Problems", on_click=load_problems)
 st.button("Save Problems", on_click=save_problems)
 
 # Display the problems JSON
