@@ -17,8 +17,15 @@ def main():
         personal_info, results = grade_notebook(notebook_path, grading_criteria)
 
         save_grading_results(results_dir, notebook_file, personal_info, results)
-
-        personal_info.update({problem: sum(test['point'] for test in tests)/len(tests) for problem, tests in results.items()})
+        personal_info.update({
+            problem: (
+                [test['point'] for test in tests if isinstance(test['point'], str)][0]
+                if any(isinstance(test['point'], str) for test in tests)
+                else sum(test['point'] for test in tests if isinstance(test['point'], (int, float))) / len(
+                    [test for test in tests if isinstance(test['point'], (int, float))])
+            )
+            for problem, tests in results.items()
+        })
         all_results.append(personal_info)
 
     save_overall_results(results_dir, all_results)
