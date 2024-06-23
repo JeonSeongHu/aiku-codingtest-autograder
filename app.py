@@ -110,7 +110,7 @@ def execute_code(problem, test_input):
     with open(temp_py_file, 'w', encoding='utf-8') as f:
         import_statements = "\n".join(
             f"import {req}{' as np' if req == 'numpy' else ' as pd' if req == 'pandas' else ''}"
-            for req in requirements if req
+            for req in problem["requirements"] if req
         )
         final_code = f"{import_statements}\n{test_code}".strip()
         f.write(final_code)
