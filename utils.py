@@ -12,8 +12,8 @@ def compare_output(output, expected_answer, answer_type):
         return float(-1e-6 < float(output) - float(expected_answer) < 1e-6)
     elif answer_type == "point":
         return float(output)
-    elif answer_type == "pass":
-        return None
+    elif answer_type == "short-answer question":
+        return output
     else:
         return float(eval(output) == eval(expected_answer))
 

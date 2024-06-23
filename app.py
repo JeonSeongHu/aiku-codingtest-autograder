@@ -225,7 +225,7 @@ for i, problem in enumerate(st.session_state.problems):
         with sub_columns[2]:
             st.button("Delete Problem", key=f"delete_{i}", on_click=delete_problem, args=(i,))
 
-        problem["description"] = st.text_input("Description", problem["description"], key=f"description_{i}")
+        problem["description"] = st.text_area("Description", problem["description"], key=f"description_{i}")
         st.markdown(problem["description"])
         requirements = st.text_input("Requirements (comma-separated)", ", ".join(problem["requirements"]), key=f"requirements_{i}")
         problem["requirements"] = [req.strip() for req in requirements.split(",")]
@@ -255,7 +255,7 @@ for i, problem in enumerate(st.session_state.problems):
             with cols[1]:
                 problem["expected_answers"][j] = st.text_input(f"Expected Answer {j + 1}", value=problem["expected_answers"][j], key=f"expected_answer_{i}_{j}")
 
-        problem["expected_answers_type"] = st.selectbox(f"Expected Answer Type", ["float", "list", "dict", "set", "str", "int", "pass", "point"], index=["float", "list", "dict", "set", "str", "int", "pass", "point"].index(problem["expected_answers_type"] if problem["expected_answers_type"] else "float"), key=f"expected_answers_type_{i}")
+        problem["expected_answers_type"] = st.selectbox(f"Expected Answer Type", ["float", "list", "dict", "set", "str", "int", "short-answer question", "point"], index=["float", "list", "dict", "set", "str", "int", "short-answer question", "point"].index(problem["expected_answers_type"] if problem["expected_answers_type"] else "float"), key=f"expected_answers_type_{i}")
 
         subproblem_of = st.text_input(f"부분 문제 (comma-separated)", ", ".join(problem["subproblem_of"]), key=f"subproblem_of_{i}")
         problem["subproblem_of"] = [sub.strip() for sub in subproblem_of.split(",")]
