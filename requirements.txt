@@ -4,3 +4,4 @@ numpy
 pyarrow
 streamlit-ace
 nbformat
+torch
