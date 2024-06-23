@@ -31,6 +31,7 @@
 - **Test Case Input / Expected Answer**: 각 Test case에 대한 Input과 예상 답안을 작성합니다.
 - **Expected Answer Type**: Expected Answer의 Type을 결정합니다.
   - **point**: `output`을 float로 변환하여 그대로 해당 문제의 점수로 사용합니다. 좀 더 복잡한 test code를 작성하고자 할 때 유용합니다.
+  - **short-answer questuon**: `output`을 str로 그대로 해당 문제의 답안으로 사용하며, 해당 값을 point에 그대로 저장합니다. ***반드시 test case 개수는 1개여야 하고, Test Case Input / Expected Answer는 비어있어야 합니다.***
   - **float**: `output`과 `Expected Answer`를 모두 float로 변환하여, 두 값의 차가 `1e-6`이하이면 정답으로 간주합니다.
   - **그 외**: `eval()`을 사용하여, 각각에 맞는 자료형으로 변환한 뒤 항등연산자(`==`)로 비교합니다.
 - **부분 문제**: 해당 문제를 풀기 전에 먼저 풀어야 하는 모든 문제의 번호를 써주시면 됩니다. 각 번호에 해당하는 모든 문제의 답안(코드)이 자동으로 포함되어 채점됩니다.
